@@ -1,0 +1,211 @@
+
+import pandas as pd
+from sklearn.metrics import root_mean_squared_error
+import numpy as np
+import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+import warnings
+warnings.filterwarnings('ignore')
+
+from submission import submit_predictions_for_test_set
+
+SEED = 42
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def compute_metrics_for_regression(y_test, y_test_pred):
+    rmse = root_mean_squared_error(y_test, y_test_pred) 
+    return rmse
+
+class RegressionModel(nn.Module):
+    def __init__(self, input_dim):
+        super(RegressionModel, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            
+            nn.Linear(32, 1)
+        )
+    
+    def forward(self, x):
+        return self.network(x)
+
+def train_model(X_train, y_train, X_valid, y_valid):
+    # Convert to numpy arrays if not already
+    X_train = np.array(X_train)
+    X_valid = np.array(X_valid)
+    y_train = np.array(y_train).reshape(-1, 1)
+    y_valid = np.array(y_valid).reshape(-1, 1)
+    
+    # Identify numerical and categorical columns
+    n_samples, n_features = X_train.shape
+    numerical_cols = list(range(n_features))
+    
+    # Create preprocessing pipeline
+    numerical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+    
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numerical_transformer, numerical_cols)
+        ])
+    
+    # Fit and transform training data
+    X_train_processed = preprocessor.fit_transform(X_train)
+    X_valid_processed = preprocessor.transform(X_valid)
+    
+    # Convert to PyTorch tensors
+    X_train_tensor = torch.FloatTensor(X_train_processed).to(device)
+    y_train_tensor = torch.FloatTensor(y_train).to(device)
+    X_valid_tensor = torch.FloatTensor(X_valid_processed).to(device)
+    y_valid_tensor = torch.FloatTensor(y_valid).to(device)
+    
+    # Create datasets and dataloaders
+    train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    
+    # Initialize model
+    input_dim = X_train_processed.shape[1]
+    model = RegressionModel(input_dim).to(device)
+    
+    # Define loss function and optimizer
+    criterion = nn.MSELoss()
+    optimizer = optim.AdamW(model.parameters(), lr=0.001, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', 
+                                                     factor=0.5, patience=10, 
+                                                     verbose=False)
+    
+    # Training loop
+    n_epochs = 200
+    best_val_loss = float('inf')
+    patience = 20
+    patience_counter = 0
+    
+    for epoch in range(n_epochs):
+        model.train()
+        train_loss = 0
+        
+        for batch_X, batch_y in train_loader:
+            optimizer.zero_grad()
+            predictions = model(batch_X)
+            loss = criterion(predictions, batch_y)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            train_loss += loss.item()
+        
+        # Validation
+        model.eval()
+        with torch.no_grad():
+            val_predictions = model(X_valid_tensor)
+            val_loss = criterion(val_predictions, y_valid_tensor)
+        
+        scheduler.step(val_loss)
+        
+        # Early stopping
+        if val_loss.item() < best_val_loss:
+            best_val_loss = val_loss.item()
+            best_model_state = model.state_dict().copy()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"Early stopping at epoch {epoch}")
+            break
+        
+        if (epoch + 1) % 20 == 0:
+            print(f"Epoch {epoch+1}/{n_epochs}, Train Loss: {train_loss/len(train_loader):.4f}, "
+                  f"Val Loss: {val_loss.item():.4f}")
+    
+    # Load best model
+    model.load_state_dict(best_model_state)
+    
+    # Store preprocessor with model for later use
+    model.preprocessor = preprocessor
+    
+    return model
+
+def predict(model, X):
+    model.eval()
+    X = np.array(X)
+    
+    # Preprocess using stored preprocessor
+    if hasattr(model, 'preprocessor'):
+        X_processed = model.preprocessor.transform(X)
+    else:
+        X_processed = X
+    
+    # Convert to tensor
+    X_tensor = torch.FloatTensor(X_processed).to(device)
+    
+    # Make predictions
+    with torch.no_grad():
+        predictions = model(X_tensor)
+    
+    # Convert to numpy and flatten
+    y_pred = predictions.cpu().numpy().flatten()
+    
+    return y_pred
+
+if __name__ == '__main__':
+    # Load and prepare data
+    data_df = pd.read_csv('train.csv')
+    data_df = data_df.dropna(subset=['Time_of_Entry'])
+    
+    # Separate features and target
+    X = data_df.drop(['Time_of_Entry'], axis=1).values
+    y = data_df['Time_of_Entry'].values
+    
+    # Create a train-valid split
+    X_train, X_valid, y_train, y_valid = train_test_split(
+        X, y, test_size=0.10, random_state=SEED
+    )
+    
+    # Train model
+    print("Training model...")
+    model = train_model(X_train, y_train, X_valid, y_valid)
+    
+    # Evaluate on validation set
+    y_valid_pred = predict(model, X_valid)
+    rmse = compute_metrics_for_regression(y_valid, y_valid_pred)
+    print(f"Final RMSE on validation set: {rmse:.4f}")
+    
+    # Load test data and make predictions
+    submission_df = pd.read_csv('test.csv')
+    # Keep all test samples (don't drop NaN in Time_of_Entry for test set)
+    X_submission = submission_df.drop(['Time_of_Entry'], axis=1).values
+    y_submission = predict(model, X_submission)
+    
+    # Submit predictions
+    submit_predictions_for_test_set(y_submission)

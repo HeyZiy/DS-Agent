@@ -1,0 +1,191 @@
+
+import pandas as pd
+from sklearn.metrics import accuracy_score
+import numpy as np
+import random
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AdamW, get_linear_schedule_with_warmup
+from sklearn.model_selection import train_test_split
+from submission import submit_predictions_for_test_set
+from tqdm import tqdm
+
+SEED = 42
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class TextDataset(Dataset):
+    def __init__(self, texts, labels, tokenizer, max_length=256):
+        self.texts = texts
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        
+    def __len__(self):
+        return len(self.texts)
+    
+    def __getitem__(self, idx):
+        text = str(self.texts[idx])
+        label = self.labels[idx]
+        
+        encoding = self.tokenizer(
+            text,
+            truncation=True,
+            padding='max_length',
+            max_length=self.max_length,
+            return_tensors='pt'
+        )
+        
+        return {
+            'input_ids': encoding['input_ids'].flatten(),
+            'attention_mask': encoding['attention_mask'].flatten(),
+            'label': torch.tensor(label, dtype=torch.long)
+        }
+
+def compute_metrics_for_classification(y_test, y_test_pred):
+    acc = accuracy_score(y_test, y_test_pred) 
+    return acc
+
+def train_model(X_train, y_train, X_valid, y_valid):
+    # Load pre-trained model and tokenizer
+    model_name = "roberta-base"  # You can try other models like "bert-base-uncased", "distilbert-base-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+    model.to(device)
+    
+    # Create datasets
+    train_dataset = TextDataset(X_train, y_train, tokenizer)
+    valid_dataset = TextDataset(X_valid, y_valid, tokenizer)
+    
+    # Create dataloaders
+    batch_size = 16
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False)
+    
+    # Training parameters
+    epochs = 3
+    learning_rate = 2e-5
+    num_training_steps = len(train_loader) * epochs
+    
+    # Optimizer and scheduler
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=0,
+        num_training_steps=num_training_steps
+    )
+    
+    # Loss function
+    criterion = nn.CrossEntropyLoss()
+    
+    # Training loop
+    best_valid_acc = 0
+    
+    for epoch in range(epochs):
+        print(f"\nEpoch {epoch + 1}/{epochs}")
+        
+        # Training phase
+        model.train()
+        train_loss = 0
+        train_correct = 0
+        train_total = 0
+        
+        progress_bar = tqdm(train_loader, desc="Training")
+        for batch in progress_bar:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['label'].to(device)
+            
+            optimizer.zero_grad()
+            
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits
+            
+            loss = criterion(logits, labels)
+            loss.backward()
+            
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            
+            optimizer.step()
+            scheduler.step()
+            
+            train_loss += loss.item()
+            _, predicted = torch.max(logits, 1)
+            train_total += labels.size(0)
+            train_correct += (predicted == labels).sum().item()
+            
+            progress_bar.set_postfix({'loss': loss.item()})
+        
+        train_acc = train_correct / train_total
+        avg_train_loss = train_loss / len(train_loader)
+        
+        # Validation phase
+        model.eval()
+        valid_correct = 0
+        valid_total = 0
+        all_preds = []
+        all_labels = []
+        
+        with torch.no_grad():
+            for batch in tqdm(valid_loader, desc="Validation"):
+                input_ids = batch['input_ids'].to(device)
+                attention_mask = batch['attention_mask'].to(device)
+                labels = batch['label'].to(device)
+                
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+                logits = outputs.logits
+                
+                _, predicted = torch.max(logits, 1)
+                valid_total += labels.size(0)
+                valid_correct += (predicted == labels).sum().item()
+                
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+        
+        valid_acc = valid_correct / valid_total
+        
+        print(f"Train Loss: {avg_train_loss:.4f}, Train Acc: {train_acc:.4f}")
+        print(f"Valid Acc: {valid_acc:.4f}")
+        
+        # Save best model
+        if valid_acc > best_valid_acc:
+            best_valid_acc = valid_acc
+            torch.save(model.state_dict(), 'best_model.pt')
+            print(f"Saved best model with validation accuracy: {valid_acc:.4f}")
+    
+    # Load best model
+    model.load_state_dict(torch.load('best_model.pt'))
+    return model, tokenizer
+
+def predict(model, tokenizer, X):
+    model.eval()
+    predictions = []
+    
+    # Create dataset and dataloader
+    dataset = TextDataset(X, [0]*len(X), tokenizer)  # dummy labels
+    dataloader = DataLoader(dataset, batch_size=16, shuffle=False)
+    
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Predicting"):
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits
+            
+            _, predicted = torch.max(logits, 1)
+            predictions.extend(predicted.cpu().numpy())
+    
+    return np.array(predictions)
+
+if __name__ == '__main__':
+    data_df = pd.read_csv('train.csv')
+    
+    # Process data and store into numpy arrays.
+    X

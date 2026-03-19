@@ -1,0 +1,262 @@
+
+import pandas as pd
+from sklearn.metrics import root_mean_squared_error
+import numpy as np
+import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from sklearn.svm import SVR
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from catboost import CatBoostRegressor
+from submission import submit_predictions_for_test_set
+
+SEED = 42
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def compute_metrics_for_regression(y_test, y_test_pred):
+    rmse = root_mean_squared_error(y_test, y_test_pred) 
+    return rmse
+
+
+class NeuralNetwork(nn.Module):
+    def __init__(self, input_dim):
+        super(NeuralNetwork, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
+    
+    def forward(self, x):
+        return self.model(x)
+
+
+def train_model(X_train, y_train, X_valid, y_valid):
+    # Convert to numpy arrays if not already
+    X_train = np.array(X_train)
+    X_valid = np.array(X_valid)
+    y_train = np.array(y_train)
+    y_valid = np.array(y_valid)
+    
+    # Feature scaling
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_valid_scaled = scaler.transform(X_valid)
+    
+    # Try multiple models and select the best one
+    models = {
+        'XGBoost': XGBRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=SEED,
+            n_jobs=-1
+        ),
+        'LightGBM': LGBMRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=SEED,
+            n_jobs=-1
+        ),
+        'CatBoost': CatBoostRegressor(
+            iterations=500,
+            learning_rate=0.05,
+            depth=6,
+            random_state=SEED,
+            verbose=0
+        ),
+        'GradientBoosting': GradientBoostingRegressor(
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=5,
+            random_state=SEED
+        ),
+        'RandomForest': RandomForestRegressor(
+            n_estimators=300,
+            max_depth=10,
+            random_state=SEED,
+            n_jobs=-1
+        )
+    }
+    
+    best_model = None
+    best_rmse = float('inf')
+    best_model_name = ""
+    
+    for name, model in models.items():
+        print(f"Training {name}...")
+        model.fit(X_train_scaled, y_train)
+        y_pred = model.predict(X_valid_scaled)
+        rmse = compute_metrics_for_regression(y_valid, y_pred)
+        print(f"{name} RMSE: {rmse:.4f}")
+        
+        if rmse < best_rmse:
+            best_rmse = rmse
+            best_model = model
+            best_model_name = name
+    
+    print(f"\nBest model: {best_model_name} with RMSE: {best_rmse:.4f}")
+    
+    # Also train a neural network ensemble
+    print("\nTraining Neural Network...")
+    input_dim = X_train_scaled.shape[1]
+    nn_model = NeuralNetwork(input_dim).to(device)
+    
+    # Convert to torch tensors
+    X_train_tensor = torch.FloatTensor(X_train_scaled).to(device)
+    y_train_tensor = torch.FloatTensor(y_train).reshape(-1, 1).to(device)
+    X_valid_tensor = torch.FloatTensor(X_valid_scaled).to(device)
+    
+    # Create dataset and dataloader
+    train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    
+    # Training setup
+    criterion = nn.MSELoss()
+    optimizer = optim.AdamW(nn_model.parameters(), lr=0.001, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
+    
+    # Training loop
+    epochs = 200
+    best_nn_rmse = float('inf')
+    patience = 20
+    patience_counter = 0
+    
+    for epoch in range(epochs):
+        nn_model.train()
+        total_loss = 0
+        
+        for batch_X, batch_y in train_loader:
+            optimizer.zero_grad()
+            predictions = nn_model(batch_X)
+            loss = criterion(predictions, batch_y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        
+        # Validation
+        nn_model.eval()
+        with torch.no_grad():
+            y_nn_pred = nn_model(X_valid_tensor).cpu().numpy().flatten()
+            nn_rmse = compute_metrics_for_regression(y_valid, y_nn_pred)
+        
+        scheduler.step(nn_rmse)
+        
+        if nn_rmse < best_nn_rmse:
+            best_nn_rmse = nn_rmse
+            patience_counter = 0
+            best_nn_state = nn_model.state_dict().copy()
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"Early stopping at epoch {epoch}")
+            break
+        
+        if (epoch + 1) % 20 == 0:
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {total_loss/len(train_loader):.4f}, Val RMSE: {nn_rmse:.4f}")
+    
+    # Load best NN model
+    nn_model.load_state_dict(best_nn_state)
+    print(f"Best Neural Network RMSE: {best_nn_rmse:.4f}")
+    
+    # Create ensemble if NN is better
+    if best_nn_rmse < best_rmse:
+        print("Using Neural Network as final model")
+        final_model = {
+            'type': 'neural_network',
+            'model': nn_model,
+            'scaler': scaler
+        }
+    else:
+        print(f"Using {best_model_name} as final model")
+        final_model = {
+            'type': 'tree_model',
+            'model': best_model,
+            'scaler': scaler
+        }
+    
+    return final_model
+
+
+def predict(model, X):
+    X = np.array(X)
+    
+    if model['type'] == 'neural_network':
+        # Scale features
+        X_scaled = model['scaler'].transform(X)
+        
+        # Convert to tensor
+        X_tensor = torch.FloatTensor(X_scaled).to(device)
+        
+        # Predict
+        model['model'].eval()
+        with torch.no_grad():
+            y_pred = model['model'](X_tensor).cpu().numpy().flatten()
+    else:
+        # Scale features
+        X_scaled = model['scaler'].transform(X)
+        
+        # Predict with tree model
+        y_pred = model['model'].predict(X_scaled)
+    
+    return y_pred
+
+
+if __name__ == '__main__':
+    # Load data
+    data_df = pd.read_csv('train.csv')
+    data_df = data_df.dropna(subset=['Time_of_Entry'])
+    
+    # Process data and store into numpy arrays.
+    X = list(data_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y = data_df.Time_of_Entry.to_numpy()
+
+    # Create a train-valid split of the data.
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.10, random_state=SEED)
+
+    # define and train the model
+    model = train_model(X_train, y_train, X_valid, y_valid)
+
+    # evaluate the model on the valid set using compute_metrics_for_regression and print the results
+    y_valid_pred = predict(model, X_valid)
+    rmse = compute_metrics_for_regression(y_valid, y_valid_pred)
+    print(f"\nFinal RMSE on validation set: {rmse:.4f}")
+
+    # submit predictions for the test set
+    submission_df = pd.read_csv('test.csv')
+    submission_df = submission_df.dropna(subset=['Time_of_Entry'])
+    X_submission = list(submission_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y_submission = predict(model, X_submission)
+    submit_predictions_for_test_set(y_submission)

@@ -1,0 +1,428 @@
+
+You are a helpful intelligent assistant. Now please help solve the following machine learning task.
+[Task]
+You are solving a machine learning regression task:
+The dataset contains airport terminal area inbound flight records. Your goal is to predict the arrival time in the terminal area for each flight in the test set based on the provided operational and trajectory-related features.
+The evaluation metric is root mean squared error (RMSE). We provide an overall pipeline in train.py. Please complete the provided train.py script to build a strong predictive model.
+[train.py] ```python
+import pandas as pd
+from sklearn.metrics import root_mean_squared_error
+import numpy as np
+import random
+import torch
+from sklearn.model_selection import train_test_split
+from submission import submit_predictions_for_test_set
+
+SEED = 42
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def compute_metrics_for_regression(y_test, y_test_pred):
+    rmse = root_mean_squared_error(y_test, y_test_pred) 
+    return rmse
+
+def train_model(X_train, y_train, X_valid, y_valid):
+    # TODO. define and train the model
+    # should return the trained model
+    model = None
+    return model
+
+def predict(model, X):
+    # TODO. predict the model
+    # should return an array of predictions
+    y_pred = np.random.randint(1, 11, len(X))
+    return y_pred
+
+if __name__ == '__main__':
+    data_df = pd.read_csv('train.csv')
+    data_df = data_df.dropna(subset=['Time_of_Entry'])
+    
+    # Process data and store into numpy arrays.
+    X = list(data_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y = data_df.Time_of_Entry.to_numpy()
+
+    # Create a train-valid split of the data.
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.10, random_state=SEED)
+
+    # define and train the model
+    # should fill out the train_model function
+    model = train_model(X_train, y_train, X_valid, y_valid)
+
+    # evaluate the model on the valid set using compute_metrics_for_regression and print the results
+    # should fill out the predict function
+    y_valid_pred = predict(model, X_valid)
+    rmse = compute_metrics_for_regression(y_valid, y_valid_pred)
+    print("final RMSE on validation set: ", rmse)
+
+    # submit predictions for the test set
+    submission_df = pd.read_csv('test.csv')
+    submission_df = submission_df.dropna(subset=['Time_of_Entry'])
+    X_submission = list(submission_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y_submission = predict(model, X_submission)
+    submit_predictions_for_test_set(y_submission)
+
+```
+Start the python code with "```python". Please ensure the completeness of the code so that it can be run without additional modifications.
+
+[This is a split string for finetuning]
+```python
+import pandas as pd
+from sklearn.metrics import root_mean_squared_error
+import numpy as np
+import random
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import Ridge
+from sklearn.neural_network import MLPRegressor
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from catboost import CatBoostRegressor
+import warnings
+warnings.filterwarnings('ignore')
+
+from submission import submit_predictions_for_test_set
+
+SEED = 42
+
+random.seed(SEED)
+torch.manual_seed(SEED)
+np.random.seed(SEED)
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def compute_metrics_for_regression(y_test, y_test_pred):
+    rmse = root_mean_squared_error(y_test, y_test_pred) 
+    return rmse
+
+def preprocess_data(X_train, X_valid, X_test=None):
+    """Preprocess data with scaling and encoding"""
+    # Identify categorical columns (assuming object dtype or low cardinality)
+    categorical_cols = []
+    numerical_cols = []
+    
+    # Convert to DataFrame for easier processing
+    X_train_df = pd.DataFrame(X_train)
+    X_valid_df = pd.DataFrame(X_valid)
+    
+    for col in X_train_df.columns:
+        if X_train_df[col].dtype == 'object' or X_train_df[col].nunique() < 20:
+            categorical_cols.append(col)
+        else:
+            numerical_cols.append(col)
+    
+    # Label encode categorical columns
+    label_encoders = {}
+    for col in categorical_cols:
+        le = LabelEncoder()
+        # Fit on train and transform all
+        le.fit(pd.concat([X_train_df[col], X_valid_df[col]], axis=0))
+        X_train_df[col] = le.transform(X_train_df[col])
+        X_valid_df[col] = le.transform(X_valid_df[col])
+        label_encoders[col] = le
+    
+    # Scale numerical columns
+    scaler = StandardScaler()
+    if numerical_cols:
+        X_train_df[numerical_cols] = scaler.fit_transform(X_train_df[numerical_cols])
+        X_valid_df[numerical_cols] = scaler.transform(X_valid_df[numerical_cols])
+    
+    # Handle test data if provided
+    if X_test is not None:
+        X_test_df = pd.DataFrame(X_test)
+        for col in categorical_cols:
+            if col in X_test_df.columns:
+                # Transform with same encoder, handle unseen values
+                X_test_df[col] = X_test_df[col].apply(lambda x: x if x in label_encoders[col].classes_ else -1)
+                le_classes = list(label_encoders[col].classes_)
+                X_test_df[col] = X_test_df[col].apply(lambda x: le_classes.index(x) if x in le_classes else -1)
+        
+        if numerical_cols:
+            X_test_df[numerical_cols] = scaler.transform(X_test_df[numerical_cols])
+        
+        return X_train_df.values, X_valid_df.values, X_test_df.values, scaler, label_encoders
+    
+    return X_train_df.values, X_valid_df.values, None, scaler, label_encoders
+
+class NeuralNetwork(nn.Module):
+    def __init__(self, input_size, hidden_sizes=[256, 128, 64], dropout_rate=0.2):
+        super(NeuralNetwork, self).__init__()
+        layers = []
+        prev_size = input_size
+        
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(prev_size, hidden_size))
+            layers.append(nn.BatchNorm1d(hidden_size))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
+            prev_size = hidden_size
+        
+        layers.append(nn.Linear(prev_size, 1))
+        
+        self.model = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        return self.model(x).squeeze()
+
+def train_model(X_train, y_train, X_valid, y_valid):
+    """Train an ensemble of models"""
+    
+    # Preprocess data
+    X_train_processed, X_valid_processed, _, scaler, label_encoders = preprocess_data(
+        X_train, X_valid
+    )
+    
+    # Convert to numpy arrays
+    X_train_np = np.array(X_train_processed, dtype=np.float32)
+    X_valid_np = np.array(X_valid_processed, dtype=np.float32)
+    y_train_np = np.array(y_train, dtype=np.float32)
+    y_valid_np = np.array(y_valid, dtype=np.float32)
+    
+    # Initialize models
+    models = {
+        'xgb': XGBRegressor(
+            n_estimators=1000,
+            learning_rate=0.01,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=SEED,
+            n_jobs=-1,
+            early_stopping_rounds=50,
+            eval_metric='rmse'
+        ),
+        'lgbm': LGBMRegressor(
+            n_estimators=1000,
+            learning_rate=0.01,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=SEED,
+            n_jobs=-1,
+            verbose=-1
+        ),
+        'catboost': CatBoostRegressor(
+            iterations=1000,
+            learning_rate=0.01,
+            depth=6,
+            random_state=SEED,
+            verbose=False,
+            early_stopping_rounds=50
+        ),
+        'rf': RandomForestRegressor(
+            n_estimators=500,
+            max_depth=10,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=SEED,
+            n_jobs=-1
+        ),
+        'gbr': GradientBoostingRegressor(
+            n_estimators=500,
+            learning_rate=0.01,
+            max_depth=5,
+            random_state=SEED
+        )
+    }
+    
+    # Train each model
+    trained_models = {}
+    for name, model in models.items():
+        print(f"Training {name}...")
+        if name in ['xgb', 'catboost']:
+            model.fit(
+                X_train_np, y_train_np,
+                eval_set=[(X_valid_np, y_valid_np)],
+                verbose=False
+            )
+        else:
+            model.fit(X_train_np, y_train_np)
+        
+        # Validate
+        y_pred = model.predict(X_valid_np)
+        rmse = compute_metrics_for_regression(y_valid_np, y_pred)
+        print(f"{name} validation RMSE: {rmse:.4f}")
+        
+        trained_models[name] = model
+    
+    # Train neural network
+    print("Training neural network...")
+    input_size = X_train_np.shape[1]
+    nn_model = NeuralNetwork(input_size).to(device)
+    
+    # Convert to torch tensors
+    X_train_tensor = torch.FloatTensor(X_train_np).to(device)
+    y_train_tensor = torch.FloatTensor(y_train_np).to(device)
+    X_valid_tensor = torch.FloatTensor(X_valid_np).to(device)
+    y_valid_tensor = torch.FloatTensor(y_valid_np).to(device)
+    
+    # Create datasets and dataloaders
+    train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    
+    # Training setup
+    criterion = nn.MSELoss()
+    optimizer = optim.AdamW(nn_model.parameters(), lr=0.001, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5)
+    
+    # Training loop
+    best_val_rmse = float('inf')
+    patience = 20
+    patience_counter = 0
+    
+    for epoch in range(200):
+        nn_model.train()
+        train_loss = 0
+        
+        for batch_X, batch_y in train_loader:
+            optimizer.zero_grad()
+            predictions = nn_model(batch_X)
+            loss = criterion(predictions, batch_y)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()
+        
+        # Validation
+        nn_model.eval()
+        with torch.no_grad():
+            val_predictions = nn_model(X_valid_tensor)
+            val_loss = criterion(val_predictions, y_valid_tensor)
+            val_rmse = torch.sqrt(val_loss).item()
+        
+        scheduler.step(val_rmse)
+        
+        # Early stopping
+        if val_rmse < best_val_rmse:
+            best_val_rmse = val_rmse
+            best_nn_state = nn_model.state_dict().copy()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"Early stopping at epoch {epoch}")
+            break
+        
+        if epoch % 20 == 0:
+            print(f"Epoch {epoch}: Train Loss = {train_loss/len(train_loader):.4f}, Val RMSE = {val_rmse:.4f}")
+    
+    # Load best model
+    nn_model.load_state_dict(best_nn_state)
+    trained_models['nn'] = nn_model
+    
+    # Create ensemble model
+    class EnsembleModel:
+        def __init__(self, models):
+            self.models = models
+        
+        def predict(self, X):
+            predictions = []
+            
+            # Convert to appropriate format for each model
+            X_np = np.array(X, dtype=np.float32)
+            X_tensor = torch.FloatTensor(X_np).to(device)
+            
+            for name, model in self.models.items():
+                if name == 'nn':
+                    model.eval()
+                    with torch.no_grad():
+                        pred = model(X_tensor).cpu().numpy()
+                else:
+                    pred = model.predict(X_np)
+                predictions.append(pred)
+            
+            # Weighted average (give more weight to better performing models)
+            weights = {
+                'xgb': 0.25,
+                'lgbm': 0.25,
+                'catboost': 0.20,
+                'rf': 0.15,
+                'gbr': 0.10,
+                'nn': 0.05
+            }
+            
+            weighted_pred = np.zeros_like(predictions[0])
+            for i, (name, pred) in enumerate(zip(self.models.keys(), predictions)):
+                weighted_pred += weights[name] * pred
+            
+            return weighted_pred
+    
+    ensemble = EnsembleModel(trained_models)
+    
+    # Store preprocessing objects for later use
+    ensemble.scaler = scaler
+    ensemble.label_encoders = label_encoders
+    
+    return ensemble
+
+def predict(model, X):
+    """Make predictions using the ensemble model"""
+    
+    # Preprocess the input data
+    X_processed = []
+    X_df = pd.DataFrame(X)
+    
+    # Apply the same preprocessing as during training
+    for col in X_df.columns:
+        if col in model.label_encoders:
+            le = model.label_encoders[col]
+            # Handle unseen values
+            X_df[col] = X_df[col].apply(lambda x: x if x in le.classes_ else -1)
+            le_classes = list(le.classes_)
+            X_df[col] = X_df[col].apply(lambda x: le_classes.index(x) if x in le_classes else -1)
+    
+    # Scale numerical columns
+    numerical_cols = [col for col in X_df.columns if col not in model.label_encoders]
+    if numerical_cols and hasattr(model, 'scaler'):
+        X_df[numerical_cols] = model.scaler.transform(X_df[numerical_cols])
+    
+    X_processed = X_df.values.astype(np.float32)
+    
+    # Make predictions
+    y_pred = model.predict(X_processed)
+    
+    return y_pred
+
+if __name__ == '__main__':
+    # Load data
+    data_df = pd.read_csv('train.csv')
+    data_df = data_df.dropna(subset=['Time_of_Entry'])
+    
+    # Process data and store into numpy arrays.
+    X = list(data_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y = data_df.Time_of_Entry.to_numpy()
+
+    # Create a train-valid split of the data.
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.10, random_state=SEED)
+
+    # Define and train the model
+    print("Starting model training...")
+    model = train_model(X_train, y_train, X_valid, y_valid)
+
+    # Evaluate the model on the valid set
+    print("\nEvaluating on validation set...")
+    y_valid_pred = predict(model, X_valid)
+    rmse = compute_metrics_for_regression(y_valid, y_valid_pred)
+    print(f"Final RMSE on validation set: {rmse:.4f}")
+
+    # Submit predictions for the test set
+    print("\nGenerating predictions for test set...")
+    submission_df = pd.read_csv('test.csv')
+    submission_df = submission_df.dropna(subset=['Time_of_Entry'])
+    X_submission = list(submission_df.drop(['Time_of_Entry'], axis=1).to_numpy())
+    y_submission = predict(model, X_submission)
+    submit_predictions_for_test_set(y_submission)
+    print("Predictions submitted successfully!")
+```
+[This is a split string for counting tokens]
+Prompt: 643, Completion: 2759
