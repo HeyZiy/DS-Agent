@@ -9,6 +9,7 @@
 .env
 /development/data
 /development/benchmarks
+/development/MLAgentBench/workspace
 development/MLAgentBench/__pycache__
 .idea/
 development/nlp_cases

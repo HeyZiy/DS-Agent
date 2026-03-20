@@ -316,9 +316,9 @@ class Environment:
                 except TooLongPromptError:
                     observation="EnvError: too long input for the tool"
                 except LLMError as e:
-                    observation = "LLMError: " + e.message
+                    observation = "LLMError: " + str(e)
                 except EnvException as e:
-                    observation = "EnvError: " + e.message
+                    observation = "EnvError: " + str(e)
                 except TypeError as e:
                     print("Step: ", curr_step, file=sys.stderr)
                     print(e, file=sys.stderr)

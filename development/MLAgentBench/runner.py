@@ -70,9 +70,9 @@ if __name__ == "__main__":
     # 参数定义区：Agent 与模型配置
     # ------------------------------
     parser.add_argument("--agent-type", type=str, default="DSAgent", help="agent type")
-    parser.add_argument("--llm-name", type=str, default="deepseek-chat", help="llm name")
-    parser.add_argument("--fast-llm-name", type=str, default="deepseek-chat", help="llm name")
-    parser.add_argument("--edit-script-llm-name", type=str, default="deepseek-chat", help="llm name")
+    parser.add_argument("--llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
+    parser.add_argument("--fast-llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
+    parser.add_argument("--edit-script-llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
     parser.add_argument("--edit-script-llm-max-tokens", type=int, default=4000, help="llm max tokens")
     parser.add_argument("--agent-max-steps", type=int, default=50, help="max iterations for agent")
 

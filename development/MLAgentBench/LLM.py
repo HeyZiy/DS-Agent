@@ -118,7 +118,7 @@ def complete_text_openai(prompt, stop_sequences=[], model="gpt-3.5-turbo", max_t
     iteration = 0
     completion = None
     last_error = None
-    while iteration < 10:
+    while iteration < 3:
         try:
             messages = [{"role": "user", "content": prompt}]
             if client is not None:
@@ -172,10 +172,6 @@ def complete_text_openai(prompt, stop_sequences=[], model="gpt-3.5-turbo", max_t
 def complete_text(prompt, log_file, model, **kwargs):
     # 统一路由器（本地部署版）：只允许 OpenAI-compatible（建议 deepseek-*）。
     """ Complete text using the specified model with appropriate API. """
-    if model.startswith("claude"):
-        raise LLMError("Model route disabled: claude backend is not enabled. Please use deepseek-chat or other OpenAI-compatible model.")
-    if "/" in model:
-        raise LLMError("Model route disabled: CRFM backend is not enabled. Please use deepseek-chat or other OpenAI-compatible model.")
 
     completion = complete_text_openai(prompt, stop_sequences=["Observation:"], log_file=log_file, model=model, **kwargs)
     return completion
