@@ -7,8 +7,8 @@ from numpy.linalg import norm
 from transformers import AutoTokenizer, AutoModel
 
 DEVELOPMENT_TASKS = ["feedback", "airline-reviews", "textual-entailment", "chatgpt-prompt", "ett-m2", "ili", "handwriting", "ethanol-concentration", "media-campaign-cost", "wild-blueberry-yield", "spaceship-titanic", "enzyme-substrate"]
-DEPLOYMENT_TASKS = ['smoker-status', 'mohs-hardness', 'bitcoin-price-prediction', 'heartbeat', 'webmd-reviews', 'cirrhosis-outcomes', 'software-defects', 'hotel-reviews', 'electricity', 'detect-ai-generation', 'weather', 'self-regulation-scp1', 'uwave-gesture-library', 'traffic', 'boolq', 'crab-age', 'concrete-strength', 'jigsaw']
-
+DEPLOYMENT_TASKS = ['smoker-status', 'mohs-hardness', 'bitcoin-price-prediction', 'heartbeat', 'webmd-reviews', 'cirrhosis-outcomes', 'software-defects', 'hotel-reviews', 'electricity', 'detect-ai-generation', 'weather', 'self-regulation-scp1', 'uwave-gesture-library', 'traffic', 'boolq', 'crab-age', 'concrete-strength', 'jigsaw',
+                    'airport_eta']
 class RetrievalDatabase:
     def __init__(self, model="BAAI/llm-embedder") -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,11 +35,11 @@ class RetrievalDatabase:
         # Construct Embedding Database
         x_inputs = self.tokenizer(
             self.case_bank,
-            padding=True, 
+            padding=True,
             truncation= True,
             return_tensors='pt'
         )
-            
+
         input_ids = x_inputs.input_ids.to(self.device)
         attention_mask = x_inputs.attention_mask.to(self.device)
 

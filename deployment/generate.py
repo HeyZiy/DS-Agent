@@ -22,8 +22,8 @@ def get_args():
     parser.add_argument("--llm", default="deepseek-chat")		# LLM name # 原来是gpt-3.5-turbo-16k
     parser.add_argument("--task", default="airport_eta")   # ML Task name
     # Context Configuration
-    parser.add_argument("--shot", default=0, type=int)              # Number of examples in context
-    parser.add_argument("--retrieval", default=False,               # Whether activate retrieval
+    parser.add_argument("--shot", default=1, type=int)              # Number of examples in context
+    parser.add_argument("--retrieval", default=True,               # Whether activate retrieval
                         action='store_true')
     parser.add_argument("--raw", default=False,                     # Whether use raw cases
                         action='store_true')

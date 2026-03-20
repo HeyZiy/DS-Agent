@@ -5,13 +5,13 @@ import numpy as np
 import pandas as pd
 from execution import execute_script
 
-DEPLOYMENT_TASKS = ['smoker-status', 'mohs-hardness', 'bitcoin-price-prediction', 'heartbeat', 'webmd-reviews', 'cirrhosis-outcomes', 'software-defects', 'hotel-reviews', 'electricity', 'detect-ai-generation', 'weather', 'self-regulation-scp1', 'uwave-gesture-library', 'traffic', 'boolq', 'crab-age', 'concrete-strength', 'jigsaw']
-
+DEPLOYMENT_TASKS = ['smoker-status', 'mohs-hardness', 'bitcoin-price-prediction', 'heartbeat', 'webmd-reviews', 'cirrhosis-outcomes', 'software-defects', 'hotel-reviews', 'electricity', 'detect-ai-generation', 'weather', 'self-regulation-scp1', 'uwave-gesture-library', 'traffic', 'boolq', 'crab-age', 'concrete-strength', 'jigsaw',
+                    'airport_eta']
 def get_args():
     parser = argparse.ArgumentParser()
     # Model Information
-    parser.add_argument("--path", default="gpt-3.5-turbo-16k_False_0")		# Code path
-    parser.add_argument("--task", default="electricity")		                    # Task name
+    parser.add_argument("--path", default="deepseek-chat_False_0")		# Code path
+    parser.add_argument("--task", default="airport_eta")		                    # Task name
     # Generation Configuration
     parser.add_argument("--trials", default=10, type=int)    		                # Number of trials (fixed)
     # Device info

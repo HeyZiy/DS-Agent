@@ -7,3 +7,6 @@
 */__pycache__/
 /deployment/benchmarks/
 .env
+/development/data
+/development/benchmarks
+development/MLAgentBench/__pycache__
