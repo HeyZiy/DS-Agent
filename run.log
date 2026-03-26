@@ -1,0 +1,41 @@
+nohup: ignoring input
+Namespace(task='airport_eta', log_dir='./logs/20260326-191946', work_dir='./workspace/20260326-191946', max_steps=30, max_time=18000, device=0, python='python', interactive=False, resume=None, resume_step=0, agent_type='DSAgent', llm_name='deepseek-ai/DeepSeek-V3.2', fast_llm_name='deepseek-ai/DeepSeek-V3.2', edit_script_llm_name='deepseek-ai/DeepSeek-V3.2', edit_script_llm_max_tokens=4000, agent_max_steps=50, actions_remove_from_prompt=['Execute Script', 'Edit Script (AI)', 'Reflection', 'List Files', 'Copy File', 'Undo Edit Script', 'Inspect Script Lines'], actions_add_to_prompt=[], no_retrieval=True, valid_format_entires=None, max_steps_in_context=3, max_observation_steps_in_context=3, max_retries=5, langchain_agent='zero-shot-react-description')
+Read only files:  []
+Failed to import AutoGPTAgent; Make sure you have installed the autogpt dependencies if you want to use it.
+prepare.py not found or already prepared
+=====================================
+Benchmark folder name:  airport_eta
+Research problem:  You are solving a machine learning regression task about airport arrival management.
+
+The dataset contains inbound flight records for aircraft approaching the Beijing Capital Airport (ZBAA) terminal area. Each row describes one flight using a curated mix of operational plan fields, route metadata, aircraft information, one departure-airport identifier, one cluster indicator, and a snapshot of the aircraft state near terminal entry. The target column is `Time_of_Entry`, which represents the remaining minutes until the flight reaches the terminal-area entry point.
+
+Train and test are split by month, so the task also includes a mild temporal-distribution shift. Several columns encode timestamps as strings such as `202508010930`, while `entry_timestamp` is a standard datetime string. Strong solutions usually benefit from:
+- careful parsing of timestamp columns
+- deriving duration / delay / lead-time features from the planned, scheduled, and realized times
+- handling mixed categorical and numerical columns robustly
+- using a tree-based regressor or an ensemble rather than a trivial baseline
+
+The evaluation metric is root mean squared error (RMSE). We provide an overall pipeline in `train.py`. Please improve the provided script to build a strong predictive model that generalizes to the held-out month in `test.csv`.
+
+Lower level actions enabled:  ['List Files', 'Read File', 'Write File', 'Append File', 'Copy File', 'Undo Edit Script', 'Execute Script', 'Python REPL', 'Final Answer']
+High level actions enabled:  ['Summary Progress', 'Develop An Experiment Plan via CBR', 'Understand File', 'Append Summary to Research Log', 'Inspect Script Lines', 'Edit Script (AI)', 'Execute the Experiment Plan', 'Edit Script Segment (AI)', 'Reflection', 'Retrieval from Research Log']
+=====================================
+Agent is up! See progress in ./logs/20260326-191946/agent_log/main_log
+Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 9188.72it/s]
+[1mBertModel LOAD REPORT[0m from: BAAI/llm-embedder
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m
+STDOUT: final RMSE on validation set:  5.543779289839814
+ STDOUT: Final RMSE on test set: 4.9294194634090935.
+ STDERR:  STDOUT:  Loading weights:   0%|          | 0/199 [00:00<?, ?it/s]Loading weights: 100%|██████████| 199/199 [00:00<00:00, 8839.65it/s]
+[1mBertModel LOAD REPORT[0m from: BAAI/llm-embedder
+Key                     | Status     |  | 
+------------------------+------------+--+-
+embeddings.position_ids | UNEXPECTED |  | 
+
+[3mNotes:
+- UNEXPECTED[3m	:can be ignored when loading from different task/architecture; not ok if you expect identical arch.[0m

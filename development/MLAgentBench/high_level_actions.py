@@ -40,19 +40,7 @@ def plan_experiment_design_cbr(experiment_log, **kwargs):
     case_prompt = retrieved_cases[0]
     
     ## retrieve and rerank
-    case_prompt, rerank_meta = retrieval_database.retrieve_then_rerank(
-        query,
-        research_problem,
-        experiment_log,
-        topk=5,
-        log_file=kwargs["log_file"],
-        return_metadata=True,
-    )
-    with open(kwargs["log_file"], "a", 1) as f:
-        f.write("\n[CBR Retrieval Debug]\n")
-        f.write(f"topk={rerank_meta['topk']}\n")
-        f.write(f"rerank_raw={rerank_meta['ranking_text']}\n")
-        f.write(f"rerank_indices={rerank_meta['ranking']}\n")
+    case_prompt = retrieval_database.retrieve_then_rerank(query, research_problem, experiment_log, topk=5, log_file=kwargs["log_file"])
     
     train_py = read_file("train.py", **kwargs)
     prompt = f"""You are a helpful AI expert assistant, responsible for decision making on the experiment plans. You have the following information including, research problem, research log, python code, and a relevant case so far. 
