@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from numpy.linalg import norm
 from transformers import AutoTokenizer, AutoModel
-from MLAgentBench.LLM import complete_text
+from LLM import complete_text
 
 RANKING_MODEL = "gpt-3.5-turbo-16k"
 

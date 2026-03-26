@@ -3,7 +3,7 @@
 import os
 from functools import partial
 import tiktoken
-from .schema import TooLongPromptError, LLMError
+from schema import TooLongPromptError, LLMError
 from dotenv import find_dotenv, load_dotenv
 load_dotenv(find_dotenv(usecwd=True), override=False)
 

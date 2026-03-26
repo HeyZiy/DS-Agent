@@ -10,16 +10,16 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com" # 设置 Hugging Face 镜像
 import argparse
 import sys
 import datetime
-from development.MLAgentBench import LLM
-from development.MLAgentBench import retrieval
-from development.MLAgentBench.environment import Environment
-from development.MLAgentBench.agents.agent import Agent, SimpleActionAgent, ReasoningActionAgent
-from development.MLAgentBench.agents.agent_research import ResearchAgent
-from development.MLAgentBench.agents.dsagent import DSAgent
-from development.MLAgentBench import high_level_actions
+import retrieval
+import LLM
+from environment import Environment
+from agents.agent import Agent, SimpleActionAgent, ReasoningActionAgent
+from agents.agent_research import ResearchAgent
+from agents.dsagent import DSAgent
+import high_level_actions
 try:
     # AutoGPTAgent 是可选依赖：未安装相关包时不影响其他 agent 运行。
-    from development.MLAgentBench.agents.agent_autogpt  import AutoGPTAgent
+    from agents.agent_autogpt  import AutoGPTAgent
 except:
     print("Failed to import AutoGPTAgent; Make sure you have installed the autogpt dependencies if you want to use it.")
 

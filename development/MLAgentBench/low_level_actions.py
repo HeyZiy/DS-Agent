@@ -10,7 +10,7 @@ import inspect
 from functools import wraps
 import time
 from io import StringIO
-from .schema import Step, ActionInfo, Action, EnvException
+from schema import Step, ActionInfo, Action, EnvException
 import readline # This is needed to make sure that the input() function works properly
 
 

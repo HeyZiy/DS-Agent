@@ -2,9 +2,9 @@
 import os
 import sys
 import anthropic
-from MLAgentBench.LLM import complete_text_fast, complete_text
-from MLAgentBench.schema import Action
-from MLAgentBench.low_level_actions import read_file
+from LLM import complete_text_fast, complete_text
+from schema import Action
+from low_level_actions import read_file
 from .agent import Agent
 from .utils import clean_log
 

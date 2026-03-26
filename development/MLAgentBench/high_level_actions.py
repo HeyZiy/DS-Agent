@@ -5,10 +5,10 @@ import datetime
 import shutil
 import difflib
 import tiktoken
-from .low_level_actions import read_file, write_file, append_file, execute_script
-from .schema import ActionInfo, EnvException
-from .LLM import complete_text_fast, complete_text
-from .retrieval import RetrievalDatabase
+from low_level_actions import read_file, write_file, append_file, execute_script
+from schema import ActionInfo, EnvException
+from LLM import complete_text_fast, complete_text
+from retrieval import RetrievalDatabase
 
 def reflection(things_to_reflect_on, work_dir = ".", research_problem = "", **kwargs):
 
@@ -27,10 +27,11 @@ def reflection(things_to_reflect_on, work_dir = ".", research_problem = "", **kw
 
 def plan_experiment_design_cbr(experiment_log, **kwargs):
     research_problem = kwargs["research_problem"]
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..")) # 当前文件所在目录的父目录，即项目根目录
     retrieval_database = RetrievalDatabase([
-           "../data/nlp_cases",
-           "../data/tsa_cases",
-           "../data/tabular_cases",
+           BASE_DIR + "/data/nlp_cases",
+           BASE_DIR + "/data/tsa_cases",
+           BASE_DIR + "/data/tabular_cases",
         ],
         model="BAAI/llm-embedder",
     )

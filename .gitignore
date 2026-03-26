@@ -3,13 +3,13 @@
 /development/MLAgentBench.egg-info/PKG-INFO
 /development/MLAgentBench.egg-info/SOURCES.txt
 /development/MLAgentBench.egg-info/top_level.txt
-.vscode/settings.json
+.vscode
 **/__pycache__
 /deployment/benchmarks/
 .env
 /development/data
 /development/benchmarks
-/development/MLAgentBench/workspace
+/workspace
 development/MLAgentBench/__pycache__
 .idea/
 development/nlp_cases
