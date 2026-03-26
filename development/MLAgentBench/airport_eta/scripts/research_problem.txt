@@ -1,0 +1,11 @@
+You are solving a machine learning regression task about airport arrival management.
+
+The dataset contains inbound flight records for aircraft approaching the Beijing Capital Airport (ZBAA) terminal area. Each row describes one flight using a curated mix of operational plan fields, route metadata, aircraft information, one departure-airport identifier, one cluster indicator, and a snapshot of the aircraft state near terminal entry. The target column is `Time_of_Entry`, which represents the remaining minutes until the flight reaches the terminal-area entry point.
+
+Train and test are split by month, so the task also includes a mild temporal-distribution shift. Several columns encode timestamps as strings such as `202508010930`, while `entry_timestamp` is a standard datetime string. Strong solutions usually benefit from:
+- careful parsing of timestamp columns
+- deriving duration / delay / lead-time features from the planned, scheduled, and realized times
+- handling mixed categorical and numerical columns robustly
+- using a tree-based regressor or an ensemble rather than a trivial baseline
+
+The evaluation metric is root mean squared error (RMSE). We provide an overall pipeline in `train.py`. Please improve the provided script to build a strong predictive model that generalizes to the held-out month in `test.csv`.

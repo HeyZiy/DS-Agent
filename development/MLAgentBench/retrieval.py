@@ -79,7 +79,7 @@ class RetrievalDatabase:
         else:
             return [self.case_bank[i] for i in ranking_index], similarity[ranking_index]
     
-    def retrieve_then_rerank(self, query, research_problem, research_log, log_file, topk=5):
+    def retrieve_then_rerank(self, query, research_problem, research_log, log_file, topk=5, return_metadata=False):
         # Retriever
         case_bank, _ = self.retrieve_case(query, num=topk)
         # RankReviser
@@ -109,7 +109,18 @@ Here are some solution cases relevant to this research problem, each indicated b
 ```
 Rank 5 cases above based on their relevance, informativess and helpfulness to the research problem and the research log for planning the next experiment step. The cases should be listed in descending order using identifiers. The most relevant, informative and helpful case should be listed first. The output format should be [] > [], e.g., [1] > [2]. Only response the ranking results, do not say any word or explain.
 """
-        ranking = complete_text(prompt, model=RANKING_MODEL, log_file=log_file)
-        ranking = re.findall(r'\[(\d+)\]', ranking)
+        ranking_text = complete_text(prompt, model=RANKING_MODEL, log_file=log_file)
+        ranking = re.findall(r'\[(\d+)\]', ranking_text)
         ranking = [int(num)-1 for num in ranking]
-        return case_bank[ranking[0]]
+
+        if len(ranking) == 0:
+            ranking = list(range(min(topk, len(case_bank))))
+
+        selected_case = case_bank[ranking[0]]
+        if return_metadata:
+            return selected_case, {
+                "ranking": ranking,
+                "ranking_text": ranking_text,
+                "topk": topk,
+            }
+        return selected_case

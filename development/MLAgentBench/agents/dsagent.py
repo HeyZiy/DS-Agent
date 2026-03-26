@@ -48,6 +48,7 @@ class DSAgent(Agent):
             with open(os.path.join(self.log_dir , "main_log"), "a", 1) as f:
                 f.write(f"Step {step}" + ":\n")
                 f.write(anthropic.AI_PROMPT + "\n" + f"Action: {action}" + "\nObservation:\n" + plans + "\n") 
+                f.write("[CBR] Retrieval + rerank executed in planning action. See env_log/tool_logs for rerank details.\n")
                 
             # Execute the experiment plan (Execute)
             # 2) 执行刚才生成的计划：默认操作 train.py，并保存回 train.py。

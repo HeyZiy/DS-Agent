@@ -55,7 +55,7 @@ if __name__ == "__main__":
     # 参数定义区：所有 Agent 通用参数
     # ------------------------------
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="feedback", help="task name") # feedback：基于用户反馈迭代改进脚本；refactor：重构脚本以满足特定要求；debug：修复脚本中的 bug；optimize：优化脚本性能；explain：解释脚本功能；translate：将脚本翻译成另一种语言；document：为脚本生成文档；test：为脚本编写测试用例。
+    parser.add_argument("--task", type=str, default="airport_eta", help="task name") 
     parser.add_argument("--log-dir", type=str, default="./logs", help="log dir")
     parser.add_argument("--work-dir", type=str, default="./workspace", help="work dir")
     parser.add_argument("--max-steps", type=int, default=30, help="number of steps")
@@ -70,9 +70,9 @@ if __name__ == "__main__":
     # 参数定义区：Agent 与模型配置
     # ------------------------------
     parser.add_argument("--agent-type", type=str, default="DSAgent", help="agent type")
-    parser.add_argument("--llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
-    parser.add_argument("--fast-llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
-    parser.add_argument("--edit-script-llm-name", type=str, default="deepseek-ai/DeepSeek-V3", help="llm name")
+    parser.add_argument("--llm-name", type=str, default="deepseek-ai/DeepSeek-V3.2", help="llm name")
+    parser.add_argument("--fast-llm-name", type=str, default="deepseek-ai/DeepSeek-V3.2", help="llm name")
+    parser.add_argument("--edit-script-llm-name", type=str, default="deepseek-ai/DeepSeek-V3.2", help="llm name")
     parser.add_argument("--edit-script-llm-max-tokens", type=int, default=4000, help="llm max tokens")
     parser.add_argument("--agent-max-steps", type=int, default=50, help="max iterations for agent")
 
